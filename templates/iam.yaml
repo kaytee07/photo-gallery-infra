@@ -1,0 +1,256 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: IAM roles and policies for ECS, CodePipeline, CodeDeploy, and GitHub OIDC
+
+Parameters:
+  GitHubRepo:
+    Type: String
+    Default: your-org/photo-gallery-app
+    Description: GitHub repo for OIDC trust (e.g., owner/repo)
+  GitHubBranch:
+    Type: String
+    Default: main
+    Description: Branch for OIDC trust
+  EcrRepositoryArn:
+    Type: String
+    Description: ARN of ECR repo (imported from ecr stack)
+  CodeDeployAppName:
+    Type: String
+    Default: PhotoGalleryCodeDeployApp
+    Description: Name of the CodeDeploy application
+  CodeDeployDeploymentGroupName:
+    Type: String
+    Default: PhotoGalleryDeploymentGroup
+    Description: Name of the CodeDeploy deployment group
+  AwsRegion:
+    Type: String
+    Default: us-east-1
+    Description: AWS Region
+
+Resources:
+  GitHubOidcProvider:
+    Type: AWS::IAM::OIDCProvider
+    Properties:
+      Url: https://token.actions.githubusercontent.com
+      ClientIdList:
+        - sts.amazonaws.com
+      ThumbprintList:
+        - 6938fd4d98bab03faadb97b34396831e3780aea1
+
+  GitHubOidcRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !Ref GitHubOidcProvider
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+              StringLike:
+                token.actions.githubusercontent.com:sub: !Sub repo:${GitHubRepo}:ref:refs/heads/${GitHubBranch}
+      Policies:
+        - PolicyName: GitHubActionsECSPermissions
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ecs:DescribeServices
+                  - ecs:DescribeTasks
+                  - ecs:DescribeTaskDefinition
+                  - ecs:ListTasks
+                  - ecs:UpdateService
+                  - ecs:RegisterTaskDefinition
+                  - ecs:DeregisterTaskDefinition
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - ecr:GetAuthorizationToken
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - ecr:BatchCheckLayerAvailability
+                  - ecr:GetDownloadUrlForLayer
+                  - ecr:GetRepositoryPolicy
+                  - ecr:DescribeRepositories
+                  - ecr:ListImages
+                  - ecr:DescribeImages
+                  - ecr:BatchGetImage
+                  - ecr:InitiateLayerUpload
+                  - ecr:UploadLayerPart
+                  - ecr:CompleteLayerUpload
+                  - ecr:PutImage
+                Resource: !Ref EcrRepositoryArn
+              - Effect: Allow
+                Action:
+                  - iam:PassRole
+                Resource:
+                  - !GetAtt EcsTaskExecutionRole.Arn
+                  - !GetAtt EcsTaskRole.Arn
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:ListBucket
+                  - s3:GetObjectVersion
+                  - s3:GetBucketVersioning
+                  - s3:GetBucketAcl
+                  - s3:GetBucketLocation
+                  - s3:GetObjectTagging
+                  - s3:GetObjectVersionTagging
+                Resource:
+                  - !Sub arn:aws:s3:::*!ImportValue storage-BucketName
+                  - !Sub arn:aws:s3:::*!ImportValue storage-BucketName/*
+              - Effect: Allow
+                Action:
+                  - cloudformation:DescribeStacks
+                  - cloudformation:DescribeStackEvents
+                  - cloudformation:DescribeStackResource
+                  - cloudformation:DescribeStackResources
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - codedeploy:CreateDeployment
+                  - codedeploy:ContinueDeployment
+                  - codedeploy:GetApplication
+                  - codedeploy:GetApplicationRevision
+                  - codedeploy:GetDeployment
+                  - codedeploy:GetDeploymentConfig
+                  - codedeploy:GetDeploymentInstance
+                  - codedeploy:ListApplications
+                  - codedeploy:ListDeploymentConfigs
+                  - codedeploy:ListDeploymentGroups
+                  - codedeploy:ListDeploymentInstances
+                  - codedeploy:ListDeployments
+                  - codedeploy:RegisterApplicationRevision
+                  - codedeploy:StopDeployment
+                Resource:
+                  - !Sub arn:aws:codedeploy:${AwsRegion}:${AWS::AccountId}:application:${CodeDeployAppName}
+                  - !Sub arn:aws:codedeploy:${AwsRegion}:${AWS::AccountId}:deploymentgroup:${CodeDeployAppName}/${CodeDeployDeploymentGroupName}
+                  - !Sub arn:aws:codedeploy:${AwsRegion}:${AWS::AccountId}:deployment:*
+                  - !Sub arn:aws:codedeploy:${AwsRegion}:${AWS::AccountId}:deploymentconfig:*
+
+  EcsTaskExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: EcsTaskExecutionPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ecr:GetAuthorizationToken
+                  - ecr:BatchCheckLayerAvailability
+                  - ecr:GetDownloadUrlForLayer
+                  - ecr:BatchGetImage
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: '*'
+
+  EcsTaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: S3Access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                  - s3:ListBucket
+                Resource:
+                  - !Sub arn:aws:s3:::*!ImportValue storage-BucketName
+                  - !Sub arn:aws:s3:::*!ImportValue storage-BucketName/*
+
+  CodePipelineRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codepipeline.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: CodePipelinePolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:GetObjectVersion
+                  - s3:PutObject
+                  - s3:ListBucket
+                  - s3:GetBucketVersioning
+                  - s3:GetBucketAcl
+                  - s3:GetBucketLocation
+                  - s3:GetObjectTagging
+                  - s3:GetObjectVersionTagging
+                  - codedeploy:*
+                  - ecs:DescribeServices
+                  - ecs:UpdateService
+                  - iam:PassRole
+                  - ecr:DescribeImages
+                  - ecr:DescribeRepositories
+                  - ecr:ListImages
+                  - ecr:BatchGetImage
+                  - ecr:GetDownloadUrlForLayer
+                  - ecr:BatchCheckLayerAvailability
+                Resource: '*'
+
+  CodeDeployRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codedeploy.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AWSCodeDeployRoleForECS
+
+Outputs:
+  GitHubOidcRoleArn:
+    Value: !GetAtt GitHubOidcRole.Arn
+    Export:
+      Name: !Sub ${AWS::StackName}-GitHubOidcRoleArn
+  EcsTaskExecutionRoleArn:
+    Value: !GetAtt EcsTaskExecutionRole.Arn
+    Export:
+      Name: !Sub ${AWS::StackName}-EcsTaskExecutionRoleArn
+  EcsTaskRoleArn:
+    Value: !GetAtt EcsTaskRole.Arn
+    Export:
+      Name: !Sub ${AWS::StackName}-EcsTaskRoleArn
+  CodePipelineRoleArn:
+    Value: !GetAtt CodePipelineRole.Arn
+    Export:
+      Name: !Sub ${AWS::StackName}-CodePipelineRoleArn
+  CodeDeployRoleArn:
+    Value: !GetAtt CodeDeployRole.Arn
+    Export:
+      Name: !Sub ${AWS::StackName}-CodeDeployRoleArn

@@ -1,0 +1,48 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Private S3 Bucket for Image Storage
+
+Parameters:
+  BucketName:
+    Type: String
+    Description: Unique name for the S3 bucket
+    Default: photo-gallery-bucket-unique
+  VpcEndpointId:
+    Type: String
+    Description: ID of the S3 VPC Endpoint
+
+Resources:
+  ImageBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref BucketName
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+
+  BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref ImageBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource:
+              - !Sub arn:aws:s3:::${ImageBucket}/*
+              - !Sub arn:aws:s3:::${ImageBucket}
+            Condition:
+              StringNotEquals:
+                aws:SourceVpce: !Ref VpcEndpointId
+
+Outputs:
+  BucketName:
+    Value: !Ref ImageBucket
+    Export:
+      Name: !Sub ${AWS::StackName}-BucketName

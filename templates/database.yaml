@@ -1,0 +1,88 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Amazon RDS PostgreSQL for metadata storage
+
+Parameters:
+  DbInstanceIdentifier:
+    Type: String
+    Default: photo-gallery-db
+  DbUsername:
+    Type: String
+    Default: admin
+  DbPassword:
+    Type: String
+    NoEcho: true
+  PrivateSubnetIds:
+    Type: CommaDelimitedList
+  VpcId:
+    Type: String
+
+Resources:
+  RdsSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for RDS
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          SourceSecurityGroupId: !Ref EcsSecurityGroup
+      Tags:
+        - Key: Name
+          Value: Photo-RDS-SG
+
+  EcsSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for ECS tasks
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 8080
+          ToPort: 8080
+          SourceSecurityGroupId: !ImportValue alb-AlbSecurityGroupId
+      Tags:
+        - Key: Name
+          Value: Photo-ECS-SG
+
+  DbSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Subnet group for RDS
+      SubnetIds: !Ref PrivateSubnetIds
+
+  RDSInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceIdentifier: !Ref DbInstanceIdentifier
+      DBName: photodb
+      Engine: postgres
+      EngineVersion: '16'
+      DBInstanceClass: db.t3.micro
+      MasterUsername: !Ref DbUsername
+      MasterUserPassword: !Ref DbPassword
+      AllocatedStorage: 20
+      StorageType: gp3
+      VPCSecurityGroups:
+        - !Ref RdsSecurityGroup
+      DBSubnetGroupName: !Ref DbSubnetGroup
+      PubliclyAccessible: false
+      MultiAZ: false
+
+Outputs:
+  RdsEndpoint:
+    Value: !GetAtt RDSInstance.Endpoint.Address
+    Export:
+      Name: !Sub ${AWS::StackName}-RdsEndpoint
+  RdsPort:
+    Value: !GetAtt RDSInstance.Endpoint.Port
+    Export:
+      Name: !Sub ${AWS::StackName}-RdsPort
+  EcsSecurityGroupId:
+    Value: !Ref EcsSecurityGroup
+    Export:
+      Name: !Sub ${AWS::StackName}-EcsSecurityGroupId
+  RdsSecurityGroupId:
+    Value: !Ref RdsSecurityGroup
+    Export:
+      Name: !Sub ${AWS::StackName}-RdsSecurityGroupId
