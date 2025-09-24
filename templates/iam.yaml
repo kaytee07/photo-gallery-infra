@@ -1,3 +1,4 @@
+
 AWSTemplateFormatVersion: '2010-09-09'
 Description: IAM roles and policies for ECS, CodePipeline, CodeDeploy, and GitHub OIDC
 
@@ -10,9 +11,6 @@ Parameters:
     Type: String
     Default: main
     Description: Branch for OIDC trust
-  EcrRepositoryArn:
-    Type: String
-    Description: ARN of ECR repo (imported from ecr stack)
   CodeDeployAppName:
     Type: String
     Default: PhotoGalleryCodeDeployApp
@@ -23,19 +21,14 @@ Parameters:
     Description: Name of the CodeDeploy deployment group
   AwsRegion:
     Type: String
-    Default: us-east-1
+    Default: eu-west-1
     Description: AWS Region
+  GitHubOidcProviderArn:
+    Type: String
+    Default: arn:aws:iam::714377355835:oidc-provider/token.actions.githubusercontent.com
+
 
 Resources:
-  GitHubOidcProvider:
-    Type: AWS::IAM::OIDCProvider
-    Properties:
-      Url: https://token.actions.githubusercontent.com
-      ClientIdList:
-        - sts.amazonaws.com
-      ThumbprintList:
-        - 6938fd4d98bab03faadb97b34396831e3780aea1
-
   GitHubOidcRole:
     Type: AWS::IAM::Role
     Properties:
@@ -44,7 +37,7 @@ Resources:
         Statement:
           - Effect: Allow
             Principal:
-              Federated: !Ref GitHubOidcProvider
+              Federated: !Ref GitHubOidcProviderArn
             Action: sts:AssumeRoleWithWebIdentity
             Condition:
               StringEquals:
@@ -83,7 +76,7 @@ Resources:
                   - ecr:UploadLayerPart
                   - ecr:CompleteLayerUpload
                   - ecr:PutImage
-                Resource: !Ref EcrRepositoryArn
+                Resource: !ImportValue PhotoGalleryecr-RepositoryArn
               - Effect: Allow
                 Action:
                   - iam:PassRole
@@ -102,8 +95,8 @@ Resources:
                   - s3:GetObjectTagging
                   - s3:GetObjectVersionTagging
                 Resource:
-                  - !Sub arn:aws:s3:::*!ImportValue storage-BucketName
-                  - !Sub arn:aws:s3:::*!ImportValue storage-BucketName/*
+                  - arn:aws:s3:::first-photo-gallery-artifacts
+                  - arn:aws:s3:::first-photo-gallery-artifacts/*
               - Effect: Allow
                 Action:
                   - cloudformation:DescribeStacks
@@ -176,11 +169,30 @@ Resources:
               - Effect: Allow
                 Action:
                   - s3:PutObject
+                  - s3:PutObjectAcl
                   - s3:GetObject
                   - s3:ListBucket
+                  - s3:DeleteObject
                 Resource:
-                  - !Sub arn:aws:s3:::*!ImportValue storage-BucketName
-                  - !Sub arn:aws:s3:::*!ImportValue storage-BucketName/*
+                  - !Sub arn:aws:s3:::${AWS::AccountId}-photo-gallery-artifacts
+                  - !Sub arn:aws:s3:::${AWS::AccountId}-photo-gallery-artifacts/*
+                  - !Sub
+                    - arn:aws:s3:::${BucketName}
+                    - { BucketName: !ImportValue PhotoGalleryStorageBucketName }
+                  - !Sub
+                    - arn:aws:s3:::${BucketName}/*
+                    - { BucketName: !ImportValue PhotoGalleryStorageBucketName }
+
+        - PolicyName: SecretsManagerAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - secretsmanager:DescribeSecret
+                  - secretsmanager:GetSecretValue
+                Resource: !ImportValue NewPhotoGalleryDBSecretArn  # Or '*' for all secrets
+
 
   CodePipelineRole:
     Type: AWS::IAM::Role
@@ -237,20 +249,24 @@ Outputs:
   GitHubOidcRoleArn:
     Value: !GetAtt GitHubOidcRole.Arn
     Export:
-      Name: !Sub ${AWS::StackName}-GitHubOidcRoleArn
+      Name: PhotoGalleryGitHubOidcRoleArn
+
   EcsTaskExecutionRoleArn:
     Value: !GetAtt EcsTaskExecutionRole.Arn
     Export:
-      Name: !Sub ${AWS::StackName}-EcsTaskExecutionRoleArn
+      Name: PhotoGalleryEcsTaskExecutionRoleArn
+
   EcsTaskRoleArn:
     Value: !GetAtt EcsTaskRole.Arn
     Export:
-      Name: !Sub ${AWS::StackName}-EcsTaskRoleArn
+      Name: PhotoGalleryEcsTaskRoleArn
+
   CodePipelineRoleArn:
     Value: !GetAtt CodePipelineRole.Arn
     Export:
-      Name: !Sub ${AWS::StackName}-CodePipelineRoleArn
+      Name: PhotoGalleryCodePipelineRoleArn
+
   CodeDeployRoleArn:
     Value: !GetAtt CodeDeployRole.Arn
     Export:
-      Name: !Sub ${AWS::StackName}-CodeDeployRoleArn
+      Name: PhotoGalleryCodeDeployRoleArn

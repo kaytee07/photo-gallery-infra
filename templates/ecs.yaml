@@ -2,12 +2,6 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: ECS cluster, service, and autoscaling
 
 Parameters:
-  TargetGroupArn:
-    Type: String
-    Description: ARN of the blue target group (imported from alb stack)
-  AlbSecurityGroupId:
-    Type: String
-    Description: Security group ID of the ALB (imported from alb stack)
   ClusterName:
     Type: String
     Default: PhotoGalleryCluster
@@ -17,21 +11,6 @@ Parameters:
   TaskMemory:
     Type: String
     Default: 512
-  VpcId:
-    Type: String
-    Description: VPC ID (imported)
-  PrivateSubnetIds:
-    Type: String
-    Description: Comma-separated private subnet IDs
-  EcsTaskExecutionRoleArn:
-    Type: String
-    Description: ARN of task execution role
-  EcsTaskRoleArn:
-    Type: String
-    Description: ARN of task role
-  EcsSecurityGroupId:
-    Type: String
-    Description: Security group ID for ECS tasks (imported from database stack)
 
 Resources:
   ECSCluster:
@@ -39,8 +18,15 @@ Resources:
     Properties:
       ClusterName: !Ref ClusterName
 
+  LogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /ecs/photo-gallery
+      RetentionInDays: 14
+
   TaskDefinition:
     Type: AWS::ECS::TaskDefinition
+    DependsOn: LogGroup
     Properties:
       Family: photo-gallery-task
       Cpu: !Ref TaskCpu
@@ -48,11 +34,11 @@ Resources:
       NetworkMode: awsvpc
       RequiresCompatibilities:
         - FARGATE
-      ExecutionRoleArn: !Ref EcsTaskExecutionRoleArn
-      TaskRoleArn: !Ref EcsTaskRoleArn
+      ExecutionRoleArn: !ImportValue PhotoGalleryEcsTaskExecutionRoleArn
+      TaskRoleArn: !ImportValue PhotoGalleryEcsTaskRoleArn
       ContainerDefinitions:
         - Name: photo-container
-          Image: !ImportValue ecr-RepositoryUri
+          Image: !ImportValue PhotoGalleryecr-RepositoryUri
           PortMappings:
             - ContainerPort: 8080
           LogConfiguration:
@@ -62,18 +48,18 @@ Resources:
               awslogs-region: !Ref AWS::Region
               awslogs-stream-prefix: ecs
           Environment:
-            - Name: SPRING_DATASOURCE_URL
-              Value: !Sub jdbc:postgresql://*!ImportValue database-RdsEndpoint:*!ImportValue database-RdsPort/photodb
             - Name: AWS_S3_BUCKET
-              Value: !ImportValue storage-BucketName
+              Value: !ImportValue PhotoGalleryStorageBucketName
             - Name: AWS_REGION
               Value: !Ref AWS::Region
-
-  LogGroup:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: /ecs/photo-gallery
-      RetentionInDays: 14
+          HealthCheck:
+            Command:
+              - CMD-SHELL
+              - curl -f http://localhost:8080/actuator/health || exit 1
+            Interval: 30
+            Timeout: 5
+            Retries: 3
+            StartPeriod: 120        
 
   ECSService:
     Type: AWS::ECS::Service
@@ -85,14 +71,14 @@ Resources:
       LaunchType: FARGATE
       NetworkConfiguration:
         AwsvpcConfiguration:
-          Subnets: !Split [ ',', !Ref PrivateSubnetIds ]
+          Subnets: !Split [ ',', !ImportValue PhotoGalleryPrivateSubnetIds ]
           SecurityGroups:
-            - !Ref EcsSecurityGroupId
+            - !ImportValue PhotoGalleryEcsSecurityGroupId
           AssignPublicIp: DISABLED
       LoadBalancers:
         - ContainerName: photo-container
           ContainerPort: 8080
-          TargetGroupArn: !Ref TargetGroupArn
+          TargetGroupArn: !ImportValue PhotoGalleryBlueTargetGroupArn
       DeploymentController:
         Type: CODE_DEPLOY
 
@@ -101,10 +87,17 @@ Resources:
     Properties:
       MaxCapacity: 4
       MinCapacity: 1
-      ResourceId: !Sub service/${ECSCluster}/${ECSService.Name}
+      ResourceId: !Join
+        - ''
+        - - 'service/'
+          - !Ref ECSCluster
+          - '/'
+          - !GetAtt ECSService.Name
       RoleARN: !Sub arn:aws:iam::${AWS::AccountId}:role/aws-service-role/ecs.application-autoscaling.amazonaws.com/AWSServiceRoleForApplicationAutoScaling_ECSService
       ScalableDimension: ecs:service:DesiredCount
       ServiceNamespace: ecs
+
+
 
   ScalingPolicy:
     Type: AWS::ApplicationAutoScaling::ScalingPolicy
@@ -123,12 +116,15 @@ Outputs:
   ClusterName:
     Value: !Ref ECSCluster
     Export:
-      Name: !Sub ${AWS::StackName}-ClusterName
+      Name: ClusterName
+
   ServiceName:
     Value: !GetAtt ECSService.Name
     Export:
-      Name: !Sub ${AWS::StackName}-ServiceName
+      Name: ServiceName
+
   TaskDefinitionArn:
     Value: !Ref TaskDefinition
     Export:
-      Name: !Sub ${AWS::StackName}-TaskDefinitionArn
+      Name: TaskDefinitionArn
+

@@ -4,7 +4,7 @@ Description: ECR repository for Photo Gallery app image
 Parameters:
   RepositoryName:
     Type: String
-    Default: photo-gallery
+    Default: photo-gallery-app
     Description: Name of the ECR repository
 
 Resources:
@@ -13,7 +13,7 @@ Resources:
     Properties:
       RepositoryName: !Ref RepositoryName
       ImageScanningConfiguration:
-        scanOnPush: true
+        ScanOnPush: true
       EncryptionConfiguration:
         EncryptionType: KMS
       LifecyclePolicy:
@@ -46,11 +46,17 @@ Resources:
           }
 
 Outputs:
-  RepositoryUri:
-    Value: !GetAtt ECRRepository.RepositoryUri
-    Export:
-      Name: !Sub ${AWS::StackName}-RepositoryUri
   RepositoryArn:
     Value: !GetAtt ECRRepository.Arn
     Export:
-      Name: !Sub ${AWS::StackName}-RepositoryArn
+      Name: PhotoGalleryecr-RepositoryArn
+
+  RepositoryUri:
+    Value: !GetAtt ECRRepository.RepositoryUri
+    Export:
+      Name: PhotoGalleryecr-RepositoryUri
+
+  RepositoryName:
+    Value: !Ref ECRRepository
+    Export:
+      Name: PhotoGalleryecr-RepositoryName

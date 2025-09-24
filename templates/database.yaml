@@ -1,27 +1,34 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: Amazon RDS PostgreSQL for metadata storage
+Description: Amazon RDS PostgreSQL for metadata storage with Secrets Manager
 
 Parameters:
   DbInstanceIdentifier:
     Type: String
-    Default: photo-gallery-db
-  DbUsername:
-    Type: String
-    Default: admin
-  DbPassword:
-    Type: String
-    NoEcho: true
-  PrivateSubnetIds:
-    Type: CommaDelimitedList
-  VpcId:
-    Type: String
+    Default: new-photo-gallery-db
+    Description: Identifier for the RDS instance
 
 Resources:
+  # Security group for ECS tasks (receives traffic from ALB SG)
+  EcsSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for ECS tasks
+      VpcId: !ImportValue PhotoGalleryVpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 8080
+          ToPort: 8080
+          SourceSecurityGroupId: !ImportValue PhotoGalleryAlbSecurityGroupId
+      Tags:
+        - Key: Name
+          Value: Photo-ECS-SG
+
+  # Security group for RDS (allows Postgres traffic from ECS SG)
   RdsSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: Security group for RDS
-      VpcId: !Ref VpcId
+      VpcId: !ImportValue PhotoGalleryVpcId
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 5432
@@ -31,26 +38,25 @@ Resources:
         - Key: Name
           Value: Photo-RDS-SG
 
-  EcsSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: Security group for ECS tasks
-      VpcId: !Ref VpcId
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 8080
-          ToPort: 8080
-          SourceSecurityGroupId: !ImportValue alb-AlbSecurityGroupId
-      Tags:
-        - Key: Name
-          Value: Photo-ECS-SG
-
+  # Subnet group for RDS (use imported private subnets)
   DbSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
       DBSubnetGroupDescription: Subnet group for RDS
-      SubnetIds: !Ref PrivateSubnetIds
+      SubnetIds: !Split [ ",", !ImportValue PhotoGalleryPrivateSubnetIds ]
 
+  # Secrets Manager entry for DB credentials
+  DBSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: /new-photo-gallery/db/credentials
+      GenerateSecretString:
+        SecretStringTemplate: '{"username": "administrator"}'
+        GenerateStringKey: password
+        PasswordLength: 16
+        ExcludeCharacters: '"@/\'
+
+  # PostgreSQL RDS Instance
   RDSInstance:
     Type: AWS::RDS::DBInstance
     Properties:
@@ -59,8 +65,8 @@ Resources:
       Engine: postgres
       EngineVersion: '16'
       DBInstanceClass: db.t3.micro
-      MasterUsername: !Ref DbUsername
-      MasterUserPassword: !Ref DbPassword
+      MasterUsername: !Join ["", ["{{resolve:secretsmanager:", !Ref DBSecret, ":SecretString:username}}"]]
+      MasterUserPassword: !Join ["", ["{{resolve:secretsmanager:", !Ref DBSecret, ":SecretString:password}}"]]
       AllocatedStorage: 20
       StorageType: gp3
       VPCSecurityGroups:
@@ -73,16 +79,24 @@ Outputs:
   RdsEndpoint:
     Value: !GetAtt RDSInstance.Endpoint.Address
     Export:
-      Name: !Sub ${AWS::StackName}-RdsEndpoint
+      Name: PhotoGalleryRdsEndpoint
+
   RdsPort:
     Value: !GetAtt RDSInstance.Endpoint.Port
     Export:
-      Name: !Sub ${AWS::StackName}-RdsPort
+      Name: PhotoGalleryRdsPort
+
   EcsSecurityGroupId:
     Value: !Ref EcsSecurityGroup
     Export:
-      Name: !Sub ${AWS::StackName}-EcsSecurityGroupId
+      Name: PhotoGalleryEcsSecurityGroupId
+
   RdsSecurityGroupId:
     Value: !Ref RdsSecurityGroup
     Export:
-      Name: !Sub ${AWS::StackName}-RdsSecurityGroupId
+      Name: PhotoGalleryRdsSecurityGroupId
+
+  DBSecretArn:
+    Value: !Ref DBSecret
+    Export:
+      Name: NewPhotoGalleryDBSecretArn

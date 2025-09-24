@@ -1,21 +1,12 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: ALB for ECS service
 
-Parameters:
-  VpcId:
-    Type: String
-  PublicSubnetIds:
-    Type: String
-  AlbName:
-    Type: String
-    Default: PhotoGalleryALB
-
 Resources:
   AlbSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: Security group for ALB
-      VpcId: !Ref VpcId
+      VpcId: !ImportValue PhotoGalleryVpcId
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 80
@@ -28,8 +19,8 @@ Resources:
   LoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      Name: !Ref AlbName
-      Subnets: !Split [ ',', !Ref PublicSubnetIds ]
+      Name: PhotoGalleryALB
+      Subnets: !Split [ ',', !ImportValue PhotoGalleryPublicSubnetIds ]
       SecurityGroups:
         - !Ref AlbSecurityGroup
       Scheme: internet-facing
@@ -41,13 +32,17 @@ Resources:
       Name: blue-tg
       Port: 8080
       Protocol: HTTP
-      VpcId: !Ref VpcId
+      VpcId: !ImportValue PhotoGalleryVpcId
       TargetType: ip
-      HealthCheckPath: /
+      HealthCheckPath: /actuator/health  
+      HealthCheckProtocol: HTTP
+      HealthCheckPort: traffic-port
       HealthCheckIntervalSeconds: 30
       HealthCheckTimeoutSeconds: 5
       HealthyThresholdCount: 2
       UnhealthyThresholdCount: 2
+      Matcher:
+        HttpCode: 200  
 
   GreenTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
@@ -55,13 +50,17 @@ Resources:
       Name: green-tg
       Port: 8080
       Protocol: HTTP
-      VpcId: !Ref VpcId
+      VpcId: !ImportValue PhotoGalleryVpcId
       TargetType: ip
-      HealthCheckPath: /
+      HealthCheckPath: /actuator/health 
+      HealthCheckProtocol: HTTP
+      HealthCheckPort: traffic-port
       HealthCheckIntervalSeconds: 30
       HealthCheckTimeoutSeconds: 5
       HealthyThresholdCount: 2
       UnhealthyThresholdCount: 2
+      Matcher:
+        HttpCode: 200
 
   Listener:
     Type: AWS::ElasticLoadBalancingV2::Listener
@@ -77,20 +76,34 @@ Outputs:
   LoadBalancerDnsName:
     Value: !GetAtt LoadBalancer.DNSName
     Export:
-      Name: !Sub ${AWS::StackName}-LoadBalancerDnsName
+      Name: PhotoGalleryLoadBalancerDnsName
+
   BlueTargetGroupArn:
     Value: !Ref BlueTargetGroup
     Export:
-      Name: !Sub ${AWS::StackName}-BlueTargetGroupArn
+      Name: PhotoGalleryBlueTargetGroupArn
+
   GreenTargetGroupArn:
     Value: !Ref GreenTargetGroup
     Export:
-      Name: !Sub ${AWS::StackName}-GreenTargetGroupArn
+      Name: PhotoGalleryGreenTargetGroupArn
+
+  BlueTargetGroupName:
+    Value: !GetAtt BlueTargetGroup.TargetGroupName
+    Export:
+      Name: PhotoGalleryBlueTargetGroupName
+
+  GreenTargetGroupName:
+    Value: !GetAtt GreenTargetGroup.TargetGroupName
+    Export:
+      Name: PhotoGalleryGreenTargetGroupName
+
   ListenerArn:
     Value: !Ref Listener
     Export:
-      Name: !Sub ${AWS::StackName}-ListenerArn
+      Name: PhotoGalleryListenerArn
+
   AlbSecurityGroupId:
     Value: !Ref AlbSecurityGroup
     Export:
-      Name: !Sub ${AWS::StackName}-AlbSecurityGroupId
+      Name: PhotoGalleryAlbSecurityGroupId

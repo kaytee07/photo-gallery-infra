@@ -205,32 +205,103 @@ Resources:
         - Key: Name
           Value: ECR-DKR-Endpoint
 
+  LogsEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref VPC
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.logs
+      VpcEndpointType: Interface
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      SecurityGroupIds:
+        - !Ref EndpointSecurityGroup
+      PrivateDnsEnabled: true
+      Tags:
+        - Key: Name
+          Value: CloudWatch-Logs-Endpoint
+
+  MonitoringEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref VPC
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.monitoring
+      VpcEndpointType: Interface
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      SecurityGroupIds:
+        - !Ref EndpointSecurityGroup
+      PrivateDnsEnabled: true
+      Tags:
+        - Key: Name
+          Value: CloudWatch-Monitoring-Endpoint
+    
+  SecretsManagerEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref VPC
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.secretsmanager
+      VpcEndpointType: Interface
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      SecurityGroupIds:
+        - !Ref EndpointSecurityGroup
+      PrivateDnsEnabled: true
+      Tags:
+        - Key: Name
+          Value: SecretsManager-Endpoint
+
+
+
 Outputs:
   VpcId:
     Value: !Ref VPC
     Export:
-      Name: !Sub ${AWS::StackName}-VpcId
+      Name: PhotoGalleryVpcId
+
   PublicSubnetIds:
     Value: !Join [ ',', [ !Ref PublicSubnet1, !Ref PublicSubnet2 ] ]
     Export:
-      Name: !Sub ${AWS::StackName}-PublicSubnetIds
+      Name: PhotoGalleryPublicSubnetIds
+
   PrivateSubnetIds:
     Value: !Join [ ',', [ !Ref PrivateSubnet1, !Ref PrivateSubnet2 ] ]
     Export:
-      Name: !Sub ${AWS::StackName}-PrivateSubnetIds
+      Name: PhotoGalleryPrivateSubnetIds
+
   PrivateRouteTable1Id:
     Value: !Ref PrivateRouteTable1
     Export:
-      Name: !Sub ${AWS::StackName}-PrivateRouteTable1Id
+      Name: PhotoGalleryPrivateRouteTable1Id
+
   PrivateRouteTable2Id:
     Value: !Ref PrivateRouteTable2
     Export:
-      Name: !Sub ${AWS::StackName}-PrivateRouteTable2Id
+      Name: PhotoGalleryPrivateRouteTable2Id
+
   EndpointSecurityGroupId:
     Value: !Ref EndpointSecurityGroup
     Export:
-      Name: !Sub ${AWS::StackName}-EndpointSecurityGroupId
+      Name: PhotoGalleryEndpointSecurityGroupId
+
   S3EndpointId:
     Value: !Ref S3Endpoint
     Export:
-      Name: !Sub ${AWS::StackName}-S3EndpointId
+      Name: PhotoGalleryS3EndpointId
+
+  LogsEndpointId:
+    Value: !Ref LogsEndpoint
+    Export:
+      Name: PhotoGalleryLogsEndpointId
+
+  MonitoringEndpointId:
+    Value: !Ref MonitoringEndpoint
+    Export:
+      Name: PhotoGalleryMonitoringEndpointId
+    
+  SecretsManagerEndpointId:
+    Value: !Ref SecretsManagerEndpoint
+    Export:
+      Name: PhotoGallerySecretsManagerEndpointId

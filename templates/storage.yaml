@@ -1,16 +1,21 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: Private S3 Bucket for Image Storage
+Description: Private S3 Buckets for ECS Photo Gallery App
 
 Parameters:
   BucketName:
     Type: String
     Description: Unique name for the S3 bucket
-    Default: photo-gallery-bucket-unique
-  VpcEndpointId:
-    Type: String
-    Description: ID of the S3 VPC Endpoint
+    Default: photo-gallery-bucket-unique-images
 
 Resources:
+  ArtifactBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: first-photo-gallery-artifacts
+      VersioningConfiguration:
+        Status: Enabled
+    DeletionPolicy: Retain
+
   ImageBucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -31,18 +36,54 @@ Resources:
       PolicyDocument:
         Version: '2012-10-17'
         Statement:
+          # Allow ECS task role access
+          - Effect: Allow
+            Principal:
+              AWS: !ImportValue PhotoGalleryEcsTaskRoleArn
+            Action:
+              - s3:PutObject
+              - s3:PutObjectAcl
+              - s3:PutObjectTagging
+              - s3:GetObject
+              - s3:ListBucket
+            Resource:
+              - !Sub arn:aws:s3:::${ImageBucket}
+              - !Sub arn:aws:s3:::${ImageBucket}/*
+
+          # Enforce HTTPS
           - Effect: Deny
             Principal: '*'
-            Action: 's3:*'
+            Action: s3:*
             Resource:
-              - !Sub arn:aws:s3:::${ImageBucket}/*
               - !Sub arn:aws:s3:::${ImageBucket}
+              - !Sub arn:aws:s3:::${ImageBucket}/*
             Condition:
-              StringNotEquals:
-                aws:SourceVpce: !Ref VpcEndpointId
+              Bool:
+                aws:SecureTransport: false
+
+          # Allow CloudFormation service role to clean up bucket
+          - Effect: Allow
+            Principal:
+              Service: cloudformation.amazonaws.com
+            Action: s3:*
+            Resource:
+              - !Sub arn:aws:s3:::${ImageBucket}
+              - !Sub arn:aws:s3:::${ImageBucket}/*
 
 Outputs:
   BucketName:
     Value: !Ref ImageBucket
     Export:
-      Name: !Sub ${AWS::StackName}-BucketName
+      Name: PhotoGalleryStorageBucketName
+
+  ArtifactBucketName:
+    Value: !Ref ArtifactBucket
+    Export:
+      Name: PhotoGalleryArtifactBucketName
+
+  ImageBucketArn:
+    Value: !GetAtt ImageBucket.Arn
+    Export:
+      Name: PhotoGalleryImageBucketArn
+
+
