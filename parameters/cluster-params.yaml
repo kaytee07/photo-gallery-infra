@@ -1,0 +1,6 @@
+template-file-path: templates/ecs.yaml
+parameters:
+  TaskCpu: '256'
+  TaskMemory: '512'
+  ClusterName: PhotoGalleryCluster
+tags: {}
