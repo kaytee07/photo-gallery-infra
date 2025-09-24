@@ -1,0 +1,4 @@
+template-file-path: templates/codepipeline.yaml
+parameters:
+  PipelineName: PhotoGalleryPipeline
+tags: {}
