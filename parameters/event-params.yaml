@@ -1,0 +1,3 @@
+template-file-path: templates/eventbridge.yaml
+parameters: {}
+tags: {}
