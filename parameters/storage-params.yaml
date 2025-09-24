@@ -1,0 +1,4 @@
+template-file-path: templates/storage.yaml
+parameters:
+  BucketName: photo-gallery-bucket-unique-images-1
+tags: {}
