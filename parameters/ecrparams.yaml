@@ -1,0 +1,4 @@
+template-file-path: templates/ecr.yaml
+parameters:
+  RepositoryName: photo-gallery-app
+tags: {}
