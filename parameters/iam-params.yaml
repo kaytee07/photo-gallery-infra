@@ -1,0 +1,9 @@
+template-file-path: templates/iam.yaml
+parameters:
+  AwsRegion: eu-west-1
+  GitHubOidcProviderArn: arn:aws:iam::714377355835:oidc-provider/token.actions.githubusercontent.com
+  GitHubBranch: main
+  CodeDeployAppName: PhotoGalleryCodeDeployApp
+  CodeDeployDeploymentGroupName: PhotoGalleryDeploymentGroup
+  GitHubRepo: kaytee07/photo-gallery-app
+tags: {}
