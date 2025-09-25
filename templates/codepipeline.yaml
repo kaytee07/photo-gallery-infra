@@ -29,7 +29,7 @@ Resources:
           ActionOnTimeout: CONTINUE_DEPLOYMENT
         TerminateBlueInstancesOnDeploymentSuccess:
           Action: TERMINATE
-          TerminationWaitTimeInMinutes: 5
+          TerminationWaitTimeInMinutes: 2
       LoadBalancerInfo:
         TargetGroupPairInfoList:
           - ProdTrafficRoute:
