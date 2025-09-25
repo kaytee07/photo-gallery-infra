@@ -38,7 +38,7 @@ Resources:
       TaskRoleArn: !ImportValue PhotoGalleryEcsTaskRoleArn
       ContainerDefinitions:
         - Name: photo-container
-          Image: !ImportValue PhotoGalleryecr-RepositoryUri
+          Image: !ImportValue "${PhotoGalleryecr-RepositoryUri}:latest"
           PortMappings:
             - ContainerPort: 8080
           LogConfiguration:
