@@ -60,6 +60,13 @@ Resources:
             Condition:
               Bool:
                 aws:SecureTransport: false
+          
+          # Allow CloudFront OAI access
+          - Effect: Allow
+            Principal:
+              CanonicalUser: !GetAtt CloudFrontOAI.S3CanonicalUserId
+            Action: s3:GetObject
+            Resource: !Sub arn:aws:s3:::${ImageBucket}/*
 
           # Allow CloudFormation service role to clean up bucket
           - Effect: Allow
